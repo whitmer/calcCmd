@@ -296,12 +296,19 @@ var calcCmd = {};
     lastComputedResult = result.computedValue;
     return result;
   };
+  calcCmd.computeValue = function(command) {
+    return calcCmd.compute(command).computedValue;
+  }
   var isFunction = function(arg) {
     return true;
   }
-  calcCmd.addFunction = function(methodName, method, description) {
+  calcCmd.addFunction = function(methodName, method, description, examples) {
     if(typeof(methodName) == 'string' && isFunction(method)) {
       method.description = description;
+      if(typeof(examples) == 'string') {
+        examples = [examples];
+      }
+      method.examples = examples;
       methods[methodName] = method;
       return true;
     }
@@ -311,6 +318,20 @@ var calcCmd = {};
     value = parseFloat(value);
     if(typeof(variableName) == 'string' && (value || value == 0)) {
       predefinedVariables[variableName] = value;
+    }
+  };
+  calcCmd.functionDescription = function(method) {
+    if(methods[method]) {
+      return methods[method].description || ("No description found for the function, " + method);
+    } else {
+      return method + " is not a recognized function";
+    }
+  };
+  calcCmd.functionExamples = function(method) {
+    if(methods[method]) {
+      return methods[method].examples || [];
+    } else {
+      return [];
     }
   };
   calcCmd.functionList = function() {
@@ -333,24 +354,24 @@ var calcCmd = {};
 })();
 (function() {
   var p = function(name, value, description) { calcCmd.addPredefinedVariable(name, value, description); }
-  var f = function(name, func, description) { calcCmd.addFunction(name, func, description); }
+  var f = function(name, func, description, example) { calcCmd.addFunction(name, func, description, example); }
   
   p('pi', Math.PI );
   p('e', Math.exp(1));
   
-  f('abs', function(val) { return Math.abs(val) }, "Returns the absolute value of the given value: abs(x)");
-  f('asin', function(x) { return Math.asin(x); }, "Returns the arcsin of the given value: asin(x)");
-  f('acos', function(x) { return Math.acos(x); }, "Returns the arccos of the given value: acos(x)");
-  f('atan', function(x) { return Math.atan(x); }, "Returns the arctan of the given value: atan(x)");
-  f('log', function(x, base) { return (Math.log(x) / Math.log(base || 10)); }, "Returns the log of the given value with an optional base: log(x, [base])");
-  f('ln', function(x) { return Math.log(x); }, "Returns the natural log of the given value: ln(x)");
-  f('rad_to_deg', function(x) { return x * 180 / Math.PI; }, "Returns the given value converted from radians to degrees: rad_to_deg(radians)");
-  f('deg_to_rad', function(x) { return x * Math.PI / 180; }, "Returns the given value converted from degrees to radians: deg_to_rad(degrees)");
-  f('sin', function(x) { return Math.sin(x); }, "Returns the sine of the given value: sin(radians)");
-  f('cos', function(x) { return Math.cos(x); }, "Returns the cosine of the given value: cos(radians)" );
-  f('tan', function(x) { return Math.tan(x); }, "Returns the tangent of the given value: tan(radians)");
-  f('pi', function(x) { return Math.PI; }, "Returns the computed value of pi");
-  f('if', function(bool, pass, fail) { return bool ? pass : fail; }, "Evaluates the first argument, returns the second argument if it evaluates to a non-zero value, otherwise returns the third value: if(bool,success,fail)");
+  f('abs', function(val) { return Math.abs(val) }, "Returns the absolute value of the given value", "abs(x)");
+  f('asin', function(x) { return Math.asin(x); }, "Returns the arcsin of the given value", "asin(x)");
+  f('acos', function(x) { return Math.acos(x); }, "Returns the arccos of the given value", "acos(x)");
+  f('atan', function(x) { return Math.atan(x); }, "Returns the arctan of the given value", "atan(x)");
+  f('log', function(x, base) { return (Math.log(x) / Math.log(base || 10)); }, "Returns the log of the given value with an optional base", "log(x, [base])");
+  f('ln', function(x) { return Math.log(x); }, "Returns the natural log of the given value", "ln(x)");
+  f('rad_to_deg', function(x) { return x * 180 / Math.PI; }, "Returns the given value converted from radians to degrees", "rad_to_deg(radians)");
+  f('deg_to_rad', function(x) { return x * Math.PI / 180; }, "Returns the given value converted from degrees to radians", "deg_to_rad(degrees)");
+  f('sin', function(x) { return Math.sin(x); }, "Returns the sine of the given value", "sin(radians)");
+  f('cos', function(x) { return Math.cos(x); }, "Returns the cosine of the given value", "cos(radians)" );
+  f('tan', function(x) { return Math.tan(x); }, "Returns the tangent of the given value", "tan(radians)");
+  f('pi', function(x) { return Math.PI; }, "Returns the computed value of pi", "pi()");
+  f('if', function(bool, pass, fail) { return bool ? pass : fail; }, "Evaluates the first argument, returns the second argument if it evaluates to a non-zero value, otherwise returns the third value", "if(bool,success,fail)");
   var make_list = function(args) {
     if(args.length == 1 && (args[0] instanceof Array)) {
       return args[0];
@@ -365,7 +386,7 @@ var calcCmd = {};
       max = Math.max(max, args[idx]);
     }
     return max;
-  }, "Returns the highest value in the list: max(a,b,c...) or max(list)");
+  }, "Returns the highest value in the list", ["max(a,b,c...)", "max(list)"]);
   f('min', function() {
     var args = make_list(arguments);
     var min = args[0];
@@ -373,8 +394,8 @@ var calcCmd = {};
       min = Math.min(min, args[idx]);
     }
     return min;
-  }, "Returns the lowest value in the list: min(a,b,c...) or min(list)");
-  f('sqrt', function(x) { return Math.sqrt(x); }, "Returns the square root of the given value: sqrt(x)");
+  }, "Returns the lowest value in the list", ["min(a,b,c...)", "min(list)"]);
+  f('sqrt', function(x) { return Math.sqrt(x); }, "Returns the square root of the given value", "sqrt(x)");
   f('sort', function(x) { 
     var args = make_list(arguments);
     var list = [];
@@ -382,7 +403,7 @@ var calcCmd = {};
       list.push(args[idx]);
     }
     return list.sort();
-  }, "Returns the list of values, sorted from lowest to highest: sort(a,b,c...) or sort(list)");
+  }, "Returns the list of values, sorted from lowest to highest", ["sort(a,b,c...)", "sort(list)"]);
   f('reverse', function(x) { 
     var args = make_list(arguments);
     var list = [];
@@ -390,17 +411,17 @@ var calcCmd = {};
       list.unshift(args[idx]);
     }
     return list;
-  }, "Reverses the order of the list of values: reverse(a,b,c...) or reverse(list)");
-  f('first', function() { return make_list(arguments)[0]; }, "Returns the first value in the list: first(a,b,c...) or first(list)");
+  }, "Reverses the order of the list of values", ["reverse(a,b,c...)", "reverse(list)"]);
+  f('first', function() { return make_list(arguments)[0]; }, "Returns the first value in the list", ["first(a,b,c...)", "first(list)"]);
   f('last', function() { 
     var args = make_list(arguments);
     return args[args.length - 1]; 
-  }, "Returns the last value in the list: last(a,b,c...) or last(list)");
-  f('at', function(list, x) { return list[x]; }, "Returns the indexed value in the given list: at(list,index)" );
-  f('rand', function(x) { return (Math.random() * (x || 1)); }, "Returns a random number between zero and the range specified, or one if no number is given: rand(x)");
+  }, "Returns the last value in the list", ["last(a,b,c...)", "last(list)"]);
+  f('at', function(list, x) { return list[x]; }, "Returns the indexed value in the given list", "at(list,index)" );
+  f('rand', function(x) { return (Math.random() * (x || 1)); }, "Returns a random number between zero and the range specified, or one if no number is given", "rand(x)");
   // // f('poly', function(x) { return 0; });
   // // f('integral', function(x) { return 0; });
-  f('length', function() { return make_list(arguments).length; }, "Returns the number of arguments in the given list: length(a,b,c...) or length(list)");
+  f('length', function() { return make_list(arguments).length; }, "Returns the number of arguments in the given list", ["length(a,b,c...)", "length(list)"]);
   var sum = function(list) {
     var total = 0;
     for(var idx = 0; idx < list.length; idx++) { // in list) {
@@ -413,7 +434,7 @@ var calcCmd = {};
   f('mean', function() { 
     var args = make_list(arguments);
     return sum(args) / args.length;
-  }, "Returns the average mean of the values in the list: mean(a,b,c...) or mean(list)");
+  }, "Returns the average mean of the values in the list", ["mean(a,b,c...)", "mean(list)"]);
   f('median', function() {
     var args = make_list(arguments);
     var list = [];
@@ -426,7 +447,7 @@ var calcCmd = {};
     } else {
       return ((list[Math.round(list.length / 2)] + list[Math.round(list.length / 2) - 1]) / 2);
     }
-  }, "Returns the media for the list of values: median(a,b,c...) or media(list)");
+  }, "Returns the media for the list of values", ["median(a,b,c...)", "media(list)"]);
   f('range', function() { 
     var args = make_list(arguments);
     var list = [];
@@ -435,10 +456,10 @@ var calcCmd = {};
     }
     var list = list.sort();
     return list[list.length - 1] - list[0];
-  }, "Returns the range for the list of values: range(a,b,c...) or range(list)");
-  f('count', function() { return make_list(arguments).length; }, "Returns the number of items in the list: count(a,b,c...) or count(list)");
-  f('sum', function() { return sum(make_list(arguments)); }, "Returns the sum of the list of values: sum(a,b,c...) or sum(list)");
-  f('stdev', function() { return 0; });
+  }, "Returns the range for the list of values", ["range(a,b,c...)", "range(list)"]);
+  f('count', function() { return make_list(arguments).length; }, "Returns the number of items in the list", ["count(a,b,c...)", "count(list)"]);
+  f('sum', function() { return sum(make_list(arguments)); }, "Returns the sum of the list of values", ["sum(a,b,c...)", "sum(list)"]);
+  // f('stdev', function() { return 0; }, "Returns the standard deviation of the list of values", ["stdev(a,b,c...)", "stdev(list)"]);
   var factorials = {};
   var fact = function(n) {
     n = Math.max(parseInt(n), 0);
@@ -452,11 +473,11 @@ var calcCmd = {};
       return n * fact(n - 1);
     }
   };
-  f('fact', function(n) { return fact(n); }, "Returns the factorial of the given number: fact(n)");
-  f('perm', function(n, k) { return fact(n) / fact(n - k); }, "Returns the permutation result for the given values: perm(n, k)");
-  f('comb', function(n, k) { return fact(n) / (fact(k) * fact(n - k)); }, "Returns the combination result for the given values: comb(n, k)");
-  f('ceil', function(x) { return Math.ceil(x); }, "Returns the ceiling for the given value: ceil(x)");
-  f('floor', function(x) { return Math.floor(x); }, "Returns the floor for the given value: floor(x)");
-  f('round', function(x) { return Math.round(x); }, "Returns the given value rounded to the nearest whole number: round(x)");
-  f('e', function(x) { return Math.exp(x || 1); }, "Returns the value for e: e()");
+  f('fact', function(n) { return fact(n); }, "Returns the factorial of the given number", "fact(n)");
+  f('perm', function(n, k) { return fact(n) / fact(n - k); }, "Returns the permutation result for the given values", "perm(n, k)");
+  f('comb', function(n, k) { return fact(n) / (fact(k) * fact(n - k)); }, "Returns the combination result for the given values", "comb(n, k)");
+  f('ceil', function(x) { return Math.ceil(x); }, "Returns the ceiling for the given value", "ceil(x)");
+  f('floor', function(x) { return Math.floor(x); }, "Returns the floor for the given value", "floor(x)");
+  f('round', function(x) { return Math.round(x); }, "Returns the given value rounded to the nearest whole number", "round(x)");
+  f('e', function(x) { return Math.exp(x || 1); }, "Returns the value for e", "e()");
 })();
