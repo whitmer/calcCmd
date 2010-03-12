@@ -3,6 +3,7 @@ var calcCmd = {};
   var methods = {};
   var predefinedVariables = {};
   var variables = {};
+  var lastComputedResult;
   var expressions = [
     {regex: /\s+/, token: 'whitespace'},
     {regex: /[a-zA-Z][a-zA-Z0-9_\.]*/, token: 'variable'},
@@ -68,6 +69,10 @@ var calcCmd = {};
         result.arguments = []
         var ender = 'comma';
         syntaxIndex = syntaxIndex + 2;
+        if(syntax[syntaxIndex].token == 'close_paren') { 
+          ender = 'close_paren'; 
+          syntaxIndex++;
+        }
         while(ender == 'comma') {
           result.arguments.push(parseExpression(syntax, ['comma', 'close_paren']));
           ender = syntax[syntaxIndex].token;
@@ -244,14 +249,22 @@ var calcCmd = {};
       return compute(tree.expression);
       break;
     case 'variable_assignment':
+      if(tree.variable.value == '_') {
+        throw("the variable '_' is reserved");
+      }
       variables[tree.variable.value] = compute(tree.assignmentExpression);
       return variables[tree.variable.value];
       break;
     case 'variable':
-      if(!variables || !variables[tree.value]) {
+      if(tree.value == '_') {
+        return lastComputedResult || 0;
+      }
+      var value = predefinedVariables && predefinedVariables[tree.value];
+      value = value || (variables && variables[tree.value]);
+      if(!value) {
         throw("undefined variable " + tree.value);
       }
-      return variables[tree.value];
+      return value;
       break;
     case 'method':
       var args = []
@@ -260,13 +273,18 @@ var calcCmd = {};
         tree.arguments[idx].computedValue = value;
         args.push(value);
       }
-      return methods[tree.value].apply(null, args);
+      if(methods[tree.value]) {
+        return methods[tree.value].apply(null, args);
+      } else {
+        throw("unrecognized method " + tree.value);
+      }
       break;
     }
     throw("Unexpected token type: " + tree.token);
   };
   calcCmd.clearMemory = function() {
     variables = {};
+    lastComputedResult = null;
   };
   calcCmd.compute = function(command) {
     var result = {};
@@ -275,125 +293,170 @@ var calcCmd = {};
     result.syntax = parseSyntax(command);
     result.tree = parseFullExpression(result.syntax);
     result.computedValue = compute(result.tree);
+    lastComputedResult = result.computedValue;
     return result;
   };
   var isFunction = function(arg) {
     return true;
   }
-  calcCmd.addFunction = function(methodName, method) {
+  calcCmd.addFunction = function(methodName, method, description) {
     if(typeof(methodName) == 'string' && isFunction(method)) {
+      method.description = description;
       methods[methodName] = method;
       return true;
     }
     return false;
   };
-  calcCmd.addPredefinedVariable = function(variableName, value) {
+  calcCmd.addPredefinedVariable = function(variableName, value, description) {
     value = parseFloat(value);
     if(typeof(variableName) == 'string' && (value || value == 0)) {
       predefinedVariables[variableName] = value;
     }
   };
+  calcCmd.functionList = function() {
+    var result = [];
+    for(var idx in methods) {
+      var method = methods[idx];
+      result.push([idx, method.description || "No description given"]);
+    }
+    result.sort(function(a, b) {
+      if(a[0] > b[0]) {
+        return 1;
+      } else if(a[0] < b[0]) {
+        return -1;
+      } else {
+        return 0;
+      }
+    });
+    return result;
+  };
 })();
 (function() {
-  var f = function(name, func) { calcCmd.addFunction(name, func); }
+  var p = function(name, value, description) { calcCmd.addPredefinedVariable(name, value, description); }
+  var f = function(name, func, description) { calcCmd.addFunction(name, func, description); }
   
-  f('abs', function(val) { return Math.abs(val) });
-  f('asin', function(x) { return Math.asin(x); });
-  f('acos', function(x) { return Math.acos(x); });
-  f('atan', function(x) { return Math.atan(x); });
-  f('log', function(x, base) { return (Math.log(x) / Math.log(base || 10)); });
-  f('ln', function(x) { return Math.log(x); });
-  f('sin', function(x) { return Math.sin(x); });
-  f('cos', function(x) { return Math.cos(x); });
-  f('tan', function(x) { return Math.tan(x); });
-  f('pi', function(x) { return Math.PI; });
-  f('if', function(bool, pass, fail) { return bool ? pass : fail; });
-  f('row', function(x) { return 0; });
+  p('pi', Math.PI );
+  p('e', Math.exp(1));
+  
+  f('abs', function(val) { return Math.abs(val) }, "Returns the absolute value of the given value: abs(x)");
+  f('asin', function(x) { return Math.asin(x); }, "Returns the arcsin of the given value: asin(x)");
+  f('acos', function(x) { return Math.acos(x); }, "Returns the arccos of the given value: acos(x)");
+  f('atan', function(x) { return Math.atan(x); }, "Returns the arctan of the given value: atan(x)");
+  f('log', function(x, base) { return (Math.log(x) / Math.log(base || 10)); }, "Returns the log of the given value with an optional base: log(x, [base])");
+  f('ln', function(x) { return Math.log(x); }, "Returns the natural log of the given value: ln(x)");
+  f('rad_to_deg', function(x) { return x * 180 / Math.PI; }, "Returns the given value converted from radians to degrees: rad_to_deg(radians)");
+  f('deg_to_rad', function(x) { return x * Math.PI / 180; }, "Returns the given value converted from degrees to radians: deg_to_rad(degrees)");
+  f('sin', function(x) { return Math.sin(x); }, "Returns the sine of the given value: sin(radians)");
+  f('cos', function(x) { return Math.cos(x); }, "Returns the cosine of the given value: cos(radians)" );
+  f('tan', function(x) { return Math.tan(x); }, "Returns the tangent of the given value: tan(radians)");
+  f('pi', function(x) { return Math.PI; }, "Returns the computed value of pi");
+  f('if', function(bool, pass, fail) { return bool ? pass : fail; }, "Evaluates the first argument, returns the second argument if it evaluates to a non-zero value, otherwise returns the third value: if(bool,success,fail)");
+  var make_list = function(args) {
+    if(args.length == 1 && (args[0] instanceof Array)) {
+      return args[0];
+    } else {
+      return args;
+    }
+  }
   f('max', function() { 
-    var max = arguments[0];
-    for(var idx = 1; idx < arguments.length; idx++) {
-      if(arguments[idx] > max) {
-        max = arguments[idx];
-      }
+    var args = make_list(arguments)
+    var max = args[0];
+    for(var idx = 0; idx < args.length; idx++) { //in arguments) {
+      max = Math.max(max, args[idx]);
     }
     return max;
-  });
-  f('min', function() { 
-    var min = arguments[0];
-    for(var idx = 1; idx < arguments.length; idx++) {
-      if(arguments[idx] < min) {
-        min = arguments[idx];
-      }
+  }, "Returns the highest value in the list: max(a,b,c...) or max(list)");
+  f('min', function() {
+    var args = make_list(arguments);
+    var min = args[0];
+    for(var idx = 0; idx < args.length; idx++) { //in arguments) {
+      min = Math.min(min, args[idx]);
     }
     return min;
-  });
-  f('sqrt', function(x) { return Math.sqrt(x); });
-  f('srt', function(x) { return arguments.sort; });
-  f('first', function() { return arguments[0]; });
-  f('last', function() { return arguments[arguments.length - 1]; });
-  f('at', function(x) { return arguments[x]; });
-  f('ran', function(x) { return (Math.random() * (x || 1)); });
-  f('rand', function(x) { return (Math.random() * (x || 1)); });
-  f('poly', function(x) { return 0; });
-  f('integral', function(x) { return 0; });
-  f('length', function() { return arguments.length; });
-  f('mean', function() { return 0; });
-  f('mode', function() { return 0; });
-  f('count', function() { return arguments.length; });
-  f('sum', function() { return 0; });
-  f('stdev', function() { return 0; });
-  f('fact', function() { return 0; });
-  f('perm', function() { return 0; });
-  f('comb', function() { return 0; });
-  f('ceil', function(x) { return Math.ceil(x); });
-  f('floor', function(x) { return Math.floor(x); });
-  f('round', function(x) { return Math.round(x); });
-  f('e', function(x) { return Math.exp(x || 1); });
-})();
-(function() {
-  var errors = 0;
-  var assertions = 0;
-  var assert = function(bool, message) {
-    assertions++;
-    if(bool) { 
+  }, "Returns the lowest value in the list: min(a,b,c...) or min(list)");
+  f('sqrt', function(x) { return Math.sqrt(x); }, "Returns the square root of the given value: sqrt(x)");
+  f('sort', function(x) { 
+    var args = make_list(arguments);
+    var list = [];
+    for(var idx = 0; idx < args.length; idx++) {
+      list.push(args[idx]);
+    }
+    return list.sort();
+  }, "Returns the list of values, sorted from lowest to highest: sort(a,b,c...) or sort(list)");
+  f('reverse', function(x) { 
+    var args = make_list(arguments);
+    var list = [];
+    for(var idx = 0; idx < args.length; idx++) {
+      list.unshift(args[idx]);
+    }
+    return list;
+  }, "Reverses the order of the list of values: reverse(a,b,c...) or reverse(list)");
+  f('first', function() { return make_list(arguments)[0]; }, "Returns the first value in the list: first(a,b,c...) or first(list)");
+  f('last', function() { 
+    var args = make_list(arguments);
+    return args[args.length - 1]; 
+  }, "Returns the last value in the list: last(a,b,c...) or last(list)");
+  f('at', function(list, x) { return list[x]; }, "Returns the indexed value in the given list: at(list,index)" );
+  f('rand', function(x) { return (Math.random() * (x || 1)); }, "Returns a random number between zero and the range specified, or one if no number is given: rand(x)");
+  // // f('poly', function(x) { return 0; });
+  // // f('integral', function(x) { return 0; });
+  f('length', function() { return make_list(arguments).length; }, "Returns the number of arguments in the given list: length(a,b,c...) or length(list)");
+  var sum = function(list) {
+    var total = 0;
+    for(var idx = 0; idx < list.length; idx++) { // in list) {
+      if(list[idx]) {
+        total += list[idx];
+      }
+    }
+    return total;
+  }
+  f('mean', function() { 
+    var args = make_list(arguments);
+    return sum(args) / args.length;
+  }, "Returns the average mean of the values in the list: mean(a,b,c...) or mean(list)");
+  f('median', function() {
+    var args = make_list(arguments);
+    var list = [];
+    for(var idx = 0; idx < args.length; idx++) {
+      list.push(args[idx]);
+    }
+    var list = list.sort();
+    if(list.length % 2 == 1) {
+      return list[Math.floor(list.length / 2)];
     } else {
-      console.error("FAILURE: " + message);
-      errors++;
+      return ((list[Math.round(list.length / 2)] + list[Math.round(list.length / 2) - 1]) / 2);
+    }
+  }, "Returns the media for the list of values: median(a,b,c...) or media(list)");
+  f('range', function() { 
+    var args = make_list(arguments);
+    var list = [];
+    for(var idx = 0; idx < args.length; idx++) {
+      list.push(args[idx]);
+    }
+    var list = list.sort();
+    return list[list.length - 1] - list[0];
+  }, "Returns the range for the list of values: range(a,b,c...) or range(list)");
+  f('count', function() { return make_list(arguments).length; }, "Returns the number of items in the list: count(a,b,c...) or count(list)");
+  f('sum', function() { return sum(make_list(arguments)); }, "Returns the sum of the list of values: sum(a,b,c...) or sum(list)");
+  f('stdev', function() { return 0; });
+  var factorials = {};
+  var fact = function(n) {
+    n = Math.max(parseInt(n), 0);
+    if(n == 0 || n == 1) {
+      return 1;
+    } else if(n > 170) {
+      return 1/0;
+    } else if(factorials[n]) {
+      return factorials[n];
+    } else {
+      return n * fact(n - 1);
     }
   };
-  var val = function(arg, result) { 
-    var answer = calcCmd.compute(arg).computedValue;
-    assert((answer == result), arg + " should equal " + result + ", not " + answer);
-  };
-  val("5+5", 10);
-  val("(5+5)", 10);
-  val("5*  3", 15);
-  val("5.2*3", 15.6);
-  val("5.2*.3", 1.56);
-  val("5*-3", -15);
-  val("5+-3", 2);
-  val("5--3", 8);
-  val("5+2*3", 11);
-  val("(5+2)*3", 21);
-  val("5/3", 5/3);
-  val("5*2-3/6", 9.5);
-  val("3^3", 27);
-  val("(3^3*2)", 54);
-  val("5+(3^3*2)*(7-6*1)", 59);
-  val("3^(2+1)", 27);
-  
-  val("a=2", 2);
-  val("a", 2);
-  val("a+3", 5);
-  val("b=2+3*3", 11);
-  val("b+a-6", 7);
-  val("bob_jones=15", 15);
-  val("sam = bob_jones / 5", 3);
-  val("sam", 3);
-  
-  val("abs(-2)", 2);
-  val("min(4)", 4);
-  val("min(2,3,4)", 2);
-  val("max(2*7,5 + 3+4, 9^2)+1", 82);
-  console.log("Finished " + assertions + " tests with " + errors + " errors");
+  f('fact', function(n) { return fact(n); }, "Returns the factorial of the given number: fact(n)");
+  f('perm', function(n, k) { return fact(n) / fact(n - k); }, "Returns the permutation result for the given values: perm(n, k)");
+  f('comb', function(n, k) { return fact(n) / (fact(k) * fact(n - k)); }, "Returns the combination result for the given values: comb(n, k)");
+  f('ceil', function(x) { return Math.ceil(x); }, "Returns the ceiling for the given value: ceil(x)");
+  f('floor', function(x) { return Math.floor(x); }, "Returns the floor for the given value: floor(x)");
+  f('round', function(x) { return Math.round(x); }, "Returns the given value rounded to the nearest whole number: round(x)");
+  f('e', function(x) { return Math.exp(x || 1); }, "Returns the value for e: e()");
 })();
