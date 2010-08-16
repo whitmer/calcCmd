@@ -222,7 +222,7 @@ var calcCmd = {};
         round3.push(round2[idx + 1]);
       }
     }
-    if(round3.length == 0) {
+    if(round3.length === 0) {
       throw("expressions should have at least one value");
     } else if(round3.length > 1) {
       throw("unexpected modifier: " + round3[1].token);
@@ -286,12 +286,20 @@ var calcCmd = {};
     variables = {};
     lastComputedResult = null;
   };
+  var cached_trees = {};
   calcCmd.compute = function(command) {
     var result = {};
     command = command.toString();
     result.command = command;
-    result.syntax = parseSyntax(command);
-    result.tree = parseFullExpression(result.syntax);
+    tree = cached_trees[command];
+    if(tree) {
+      result.syntax = tree.syntax;
+      result.tree = tree.tree;
+    } else {
+      result.syntax = parseSyntax(command);
+      result.tree = parseFullExpression(result.syntax);
+      cached_trees[command] = result;
+    }
     result.computedValue = compute(result.tree);
     lastComputedResult = result.computedValue;
     return result;
@@ -466,7 +474,7 @@ var calcCmd = {};
     if(n == 0 || n == 1) {
       return 1;
     } else if(n > 170) {
-      return 1/0;
+      return Infinity;
     } else if(factorials[n]) {
       return factorials[n];
     } else {
