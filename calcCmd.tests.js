@@ -99,7 +99,7 @@
   val("range(1,2,3,4,5)", 4);
   val("count(1,2,3,4,5,6,7)", 7);
   val("sum(1,2,3)", 6);
-  val("stdev(2,2,2)", 0);
+  // val("stdev(2,2,2)", 0);
   val("fact(3)", 6);
   val("perm(7, 2)", 42);
   val("comb(5, 2)", 10);
@@ -119,6 +119,13 @@
     console.error("Variable should have been undefined");
   } catch(e) {
   }
+  
+  val("x=5", 5)
+  val("x+(3^3*2)*(7-6*1)", 59);
+  val("x+(3^3*2)*(7-6*1)", 59);
+  val("x+(3^3*2)*(7-6*1)", 59);
+  val("x=6", 6)
+  val("x+(3^3*2)*(7-6*1)", 60);
   
   
   console.log("Finished " + assertions + " tests with " + errors + " errors");
